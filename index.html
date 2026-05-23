@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>我们的相册</title>
+<style>
+  :root {
+    --text-gold: #f0d78c;
+    --bg: #0a0a14;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    height: 100dvh;
+    width: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+  }
+
+  #canvas-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+
+  canvas { display: block; }
+
+  /* Text overlay */
+  #text-overlay {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    pointer-events: none;
+    text-align: center;
+    width: 90%;
+    max-width: 600px;
+  }
+
+  #text-overlay .line {
+    display: block;
+    font-size: clamp(20px, 4vw, 32px);
+    color: var(--text-gold);
+    text-shadow: 0 0 20px rgba(240, 215, 140, 0.5), 0 0 60px rgba(240, 180, 120, 0.3);
+    letter-spacing: 0.08em;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 1.2s ease, transform 1.2s ease;
+    line-height: 1.8;
+    font-weight: 300;
+  }
+
+  #text-overlay .line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Loading */
+  #loading {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+    color: var(--text-gold);
+    font-size: 16px;
+    letter-spacing: 0.1em;
+    transition: opacity 0.6s ease;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+
+  .loading-heart {
+    display: block;
+    font-size: 40px;
+    animation: heartbeat 1.2s ease-in-out infinite;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    15% { transform: scale(1.25); }
+    30% { transform: scale(1); }
+    45% { transform: scale(1.18); }
+    60% { transform: scale(1); }
+  }
+
+  /* Nav dots */
+  #nav-dots {
+    position: fixed;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    gap: 10px;
+  }
+  #nav-dots .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    cursor: pointer;
+    transition: all 0.4s ease;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  #nav-dots .dot.active {
+    background: var(--text-gold);
+    box-shadow: 0 0 12px rgba(240, 215, 140, 0.6);
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  /* Hint */
+  #hint {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    color: rgba(255,255,255,0.35);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+
+  /* Music toggle */
+  #music-btn {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 30;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.7);
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  #music-btn:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.25);
+  }
+
+  /* Vignette */
+  #vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(5, 3, 15, 0.55) 85%, rgba(5, 3, 15, 0.85) 100%);
+  }
+
+  /* Floating sparkles (CSS) */
+  @keyframes sparkleFloat {
+    0% { transform: translateY(0) scale(0); opacity: 0; }
+    10% { opacity: 0.9; }
+    30% { transform: translateY(-120px) scale(1); opacity: 0.7; }
+    100% { transform: translateY(-280px) scale(0.2); opacity: 0; }
+  }
+  .sparkle {
+    position: fixed;
+    z-index: 8;
+    pointer-events: none;
+    width: 3px; height: 3px;
+    background: #f0d78c;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #f0d78c, 0 0 12px rgba(255, 180, 150, 0.5);
+    animation: sparkleFloat 3s ease-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="text-overlay">
+  <span class="line"></span>
+</div>
+
+<div id="loading">
+  <span class="loading-heart">&#10084;</span>
+  加载中...
+</div>
+
+<div id="hint">拖拽旋转 &#183; 滚轮切换 &#183; 按A自动播放</div>
+<div id="nav-dots"></div>
+
+<div id="vignette"></div>
+<button id="music-btn" title="音乐">&#9835;</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js">
+</script>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+const PHOTO_COUNT = 12;
+const PHOTO_PATHS = Array.from({length: PHOTO_COUNT}, (_, i) => `images/${i + 1}.jpg.jpg.jpg`);
+
+const ROMANTIC_TEXTS = [
+  '所有的偶然，都是命中注定的必然',
+  '你在身旁，就是最好的时光',
+  '遇见你，是我此生最美的意外',
+  '愿得一心人，白首不相离',
+  '我们的故事，从这里开始',
+  '世间万物，都不及你',
+  '有你的每一天，都值得纪念',
+  '执子之手，与子偕老',
+];
+
+// ============================================================
+// DOM ELEMENTS
+// ============================================================
+const container = document.getElementById('canvas-container');
+const textOverlay = document.getElementById('text-overlay');
+const textLine = textOverlay.querySelector('.line');
+const loadingEl = document.getElementById('loading');
+const hintEl = document.getElementById('hint');
+const navDots = document.getElementById('nav-dots');
+const musicBtn = document.getElementById('music-btn');
+
+// ============================================================
+// THREE.JS SETUP
+// ============================================================
+const WIDTH = container.clientWidth;
+const HEIGHT = container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(WIDTH, HEIGHT);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(60, WIDTH / HEIGHT, 0.1, 100);
+camera.position.set(0, 2, 60); // start far for entrance dolly
+camera.lookAt(0, 0, 0);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+const ambientLight = new THREE.AmbientLight(0x334466, 1.5);
+scene.add(ambientLight);
+
+const mainLight = new THREE.DirectionalLight(0xffeedd, 3);
+mainLight.position.set(5, 5, 8);
+scene.add(mainLight);
+
+const rimLight = new THREE.DirectionalLight(0xff8866, 1.5);
+rimLight.position.set(-5, -2, -3);
+scene.add(rimLight);
+
+const topLight = new THREE.DirectionalLight(0x8899cc, 1.2);
+topLight.position.set(0, 8, 2);
+scene.add(topLight);
+
+// ============================================================
+// STARFIELD
+// ============================================================
+const starsGeo = new THREE.BufferGeometry();
+const starsCount = 2000;
+const starsPositions = new Float32Array(starsCount * 3);
+const starsSizes = new Float32Array(starsCount);
+
+for (let i = 0; i < starsCount; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const radius = 18 + Math.random() * 25;
+  starsPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+  starsPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+  starsPositions[i * 3 + 2] = radius * Math.cos(phi);
+  starsSizes[i] = Math.random() * 2.5 + 0.5;
+}
+
+starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPositions, 3));
+starsGeo.setAttribute('size', new THREE.BufferAttribute(starsSizes, 1));
+
+const starsMat = new THREE.PointsMaterial({
+  color: 0xffffff,
+  size: 0.025,
+  transparent: true,
+  opacity: 0.8,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  sizeAttenuation: true,
+});
+
+const stars = new THREE.Points(starsGeo, starsMat);
+scene.add(stars);
+
+// Twinkle stars (warmer colored)
+const twinkleGeo = new THREE.BufferGeometry();
+const twinkleCount = 400;
+const twinklePositions = new Float32Array(twinkleCount * 3);
+for (let i = 0; i < twinkleCount; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const radius = 12 + Math.random() * 20;
+  twinklePositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+  twinklePositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+  twinklePositions[i * 3 + 2] = radius * Math.cos(phi);
+}
+twinkleGeo.setAttribute('position', new THREE.BufferAttribute(twinklePositions, 3));
+
+const twinkleMat = new THREE.PointsMaterial({
+  color: 0xffccaa,
+  size: 0.035,
+  transparent: true,
+  opacity: 0.6,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  sizeAttenuation: true,
+});
+
+const twinkleStars = new THREE.Points(twinkleGeo, twinkleMat);
+scene.add(twinkleStars);
+
+// ============================================================
+// HEART PARTICLES (floating)
+// ============================================================
+function createHeartTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, 64, 64);
+  ctx.save();
+  ctx.translate(32, 36);
+
+  // Draw heart shape
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.bezierCurveTo(-20, -10, -28, -22, -14, -28);
+  ctx.bezierCurveTo(-4, -34, 0, -20, 0, -20);
+  ctx.bezierCurveTo(0, -20, 4, -34, 14, -28);
+  ctx.bezierCurveTo(28, -22, 20, -10, 0, 10);
+  ctx.closePath();
+
+  const gradient = ctx.createRadialGradient(0, -8, 2, 0, 0, 28);
+  gradient.addColorStop(0, 'rgba(255, 180, 180, 1)');
+  gradient.addColorStop(0.6, 'rgba(255, 120, 150, 0.8)');
+  gradient.addColorStop(1, 'rgba(255, 80, 120, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  ctx.restore();
+  return new THREE.CanvasTexture(canvas);
+}
+
+const heartTexture = createHeartTexture();
+const heartsGroup = new THREE.Group();
+scene.add(heartsGroup);
+
+const heartSprites = [];
+const heartCount = 55;
+
+for (let i = 0; i < heartCount; i++) {
+  const heartMat = new THREE.SpriteMaterial({
+    map: heartTexture,
+    transparent: true,
+    opacity: 0.15 + Math.random() * 0.35,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    color: Math.random() < 0.5
+      ? new THREE.Color().setHSL(0.93, 0.8, 0.7 + Math.random() * 0.3)  // pink
+      : new THREE.Color().setHSL(0.12, 0.7, 0.75 + Math.random() * 0.25),  // gold
+  });
+
+  const sprite = new THREE.Sprite(heartMat);
+  const scale = 0.12 + Math.random() * 0.35;
+  sprite.scale.set(scale, scale, 1);
+
+  // Position in a spherical shell around the center
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const radius = 8 + Math.random() * 18;
+  sprite.position.set(
+    radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.sin(phi) * Math.sin(theta),
+    radius * Math.cos(phi)
+  );
+
+  sprite.userData = {
+    basePosition: sprite.position.clone(),
+    floatSpeed: 0.3 + Math.random() * 1.2,
+    floatAmp: 0.3 + Math.random() * 1.5,
+    rotSpeed: 0.2 + Math.random() * 0.6,
+    phase: Math.random() * Math.PI * 2,
+    life: Math.random(),
+    lifeSpeed: 0.001 + Math.random() * 0.003,
+  };
+
+  heartsGroup.add(sprite);
+  heartSprites.push(sprite);
+}
+
+// ============================================================
+// PHOTO SYSTEM
+// ============================================================
+const photosGroup = new THREE.Group();
+scene.add(photosGroup);
+
+const photos = [];
+
+// Canvas rounded rect polyfill
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// Generate fallback texture with gradient
+function createFallbackTexture(index) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 320;
+  const ctx = canvas.getContext('2d');
+
+  const hues = [340, 20, 280, 200, 40, 300, 160, 10, 250, 30, 180, 350];
+  const hue = hues[index % hues.length];
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, 256, 320);
+  grad.addColorStop(0, `hsl(${hue}, 40%, 30%)`);
+  grad.addColorStop(0.5, `hsl(${hue + 10}, 35%, 22%)`);
+  grad.addColorStop(1, `hsl(${hue - 5}, 30%, 18%)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 320);
+
+  // Decorative frame
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 2;
+  roundedRect(ctx, 8, 8, 240, 304, 6);
+  ctx.stroke();
+
+  // Inner glow border
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  roundedRect(ctx, 16, 16, 224, 288, 3);
+  ctx.stroke();
+
+  // Heart icon
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.font = '40px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('❤', 128, 170);
+
+  // Number
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '14px "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillText(`${index + 1}`, 128, 210);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+// Create photo planes
+function createPhotoPlane(texture, index) {
+  const aspectRatio = 256 / 320;
+  const height = 4.0;
+  const width = height * aspectRatio;
+
+  const geometry = new THREE.PlaneGeometry(width, height);
+
+  // Add slight rounded-corner effect via geometry
+  const material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: 0.35,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+
+  // Add subtle back glow
+  const backGlowGeo = new THREE.PlaneGeometry(width + 0.08, height + 0.08);
+  const backGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xffddee,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.15,
+    depthWrite: false,
+  });
+  const backGlow = new THREE.Mesh(backGlowGeo, backGlowMat);
+  backGlow.position.z = -0.005;
+  mesh.add(backGlow);
+
+  mesh.userData = {
+    index,
+    currentPos: new THREE.Vector3(),
+    targetPos: new THREE.Vector3(),
+    currentRot: new THREE.Euler(),
+    targetRot: new THREE.Euler(),
+    backGlow,
+  };
+
+  return mesh;
+}
+
+// Load all photos
+let loadedCount = 0;
+for (let i = 0; i < PHOTO_COUNT; i++) {
+  const fallbackTex = createFallbackTexture(i);
+
+  const photo = createPhotoPlane(fallbackTex, i);
+  photosGroup.add(photo);
+  photos.push(photo);
+
+  // Load real photo — Image.src does NOT trigger CORS for same-origin
+  const idx = i;
+  const img = new Image();
+  img.onload = function() {
+    console.log('✅ Photo ' + (idx + 1) + ' loaded: ' + img.naturalWidth + 'x' + img.naturalHeight);
+    const texture = new THREE.Texture(img);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    photos[idx].material.map = texture;
+    photos[idx].material.needsUpdate = true;
+    loadedCount++;
+    checkAllLoaded();
+  };
+  img.onerror = function() {
+    console.warn('❌ Photo ' + (idx + 1) + ' failed to load: ' + PHOTO_PATHS[idx]);
+    loadedCount++;
+    checkAllLoaded();
+  };
+  img.src = PHOTO_PATHS[idx];
+}
+
+function checkAllLoaded() {
+  if (loadedCount >= PHOTO_COUNT) {
+    setTimeout(() => {
+      loadingEl.classList.add('hidden');
+      setTimeout(() => loadingEl.remove(), 600);
+    }, 400);
+  }
+}
+
+// Fallback: hide loading after 12 seconds even if photos aren't all loaded
+setTimeout(() => {
+  if (!loadingEl.classList.contains('hidden')) {
+    loadingEl.classList.add('hidden');
+    setTimeout(() => loadingEl.remove(), 600);
+  }
+}, 12000);
+
+// ============================================================
+// FORMATION DEFINITIONS
+// ============================================================
+function heartPosition(t) {
+  // Parametric heart curve
+  const s = Math.sin(t);
+  const x = 16 * s * s * s;
+  const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+  return { x: x * 0.12, y: y * 0.12 };
+}
+
+function getFormationPositions(type) {
+  const positions = [];
+  const rotations = [];
+
+  switch (type) {
+    case 'scattered': {
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const radius = 8 + Math.random() * 14;
+        positions.push(new THREE.Vector3(
+          radius * Math.sin(phi) * Math.cos(theta),
+          radius * Math.sin(phi) * Math.sin(theta),
+          radius * Math.cos(phi) * 0.5
+        ));
+        rotations.push(new THREE.Euler(
+          (Math.random() - 0.5) * 0.6,
+          (Math.random() - 0.5) * 0.6,
+          (Math.random() - 0.5) * 0.4
+        ));
+      }
+      break;
+    }
+
+    case 'heart': {
+      const layerZ = [-2.4, -0.8, 0.8, 2.4];
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const t = (i / PHOTO_COUNT) * Math.PI * 2;
+        const heart = heartPosition(t);
+        const zIdx = i % layerZ.length;
+        positions.push(new THREE.Vector3(heart.x * 4, heart.y * 4, layerZ[zIdx] + (Math.random() - 0.5) * 1.2));
+        rotations.push(new THREE.Euler(0, 0, (Math.random() - 0.5) * 0.2));
+      }
+      break;
+    }
+
+    case 'ring': {
+      const radius = 12;
+      const tiltAngle = 0.15;
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const angle = (i / PHOTO_COUNT) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius * 0.6;
+        const y = Math.sin(angle) * radius * Math.sin(tiltAngle) + (Math.random() - 0.5) * 1.2;
+        positions.push(new THREE.Vector3(x, y, z));
+        // Face inward slightly
+        const lookAngle = Math.atan2(z, x);
+        rotations.push(new THREE.Euler(0, -lookAngle + Math.PI / 2, 0));
+      }
+      break;
+    }
+
+    case 'sphere': {
+      const goldenRatio = (1 + Math.sqrt(5)) / 2;
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const theta = 2 * Math.PI * i / goldenRatio;
+        const phi = Math.acos(1 - 2 * (i + 0.5) / PHOTO_COUNT);
+        const radius = 11;
+        positions.push(new THREE.Vector3(
+          radius * Math.sin(phi) * Math.cos(theta),
+          radius * Math.cos(phi),
+          radius * Math.sin(phi) * Math.sin(theta)
+        ));
+        // Face outward
+        const dir = positions[i].clone().normalize();
+        const lookY = Math.atan2(dir.x, dir.z);
+        const lookX = -Math.asin(dir.y);
+        rotations.push(new THREE.Euler(lookX, lookY, 0));
+      }
+      break;
+    }
+
+    case 'cascade': {
+      const cols = 4;
+      const spacingX = 5.0;
+      const spacingY = 6.0;
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const offsetX = (col - (cols - 1) / 2) * spacingX;
+        const offsetY = (row - 1) * -spacingY + 4.8;
+        const offsetZ = row * 3.0 - 5;
+        positions.push(new THREE.Vector3(offsetX, offsetY, offsetZ));
+        rotations.push(new THREE.Euler(0, 0, 0));
+      }
+      break;
+    }
+
+    case 'wave': {
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const t = (i / (PHOTO_COUNT - 1)) * Math.PI * 2.5 - Math.PI * 1.25;
+        const x = t * 3.5;
+        const y = Math.sin(t * 1.5) * 5.5;
+        const z = Math.cos(t * 0.8) * 6.5;
+        positions.push(new THREE.Vector3(x, y, z));
+        rotations.push(new THREE.Euler(0, 0, Math.sin(t) * 0.3));
+      }
+      break;
+    }
+
+    case 'tunnel': {
+      const tunnelRadius = 10;
+      const tunnelLength = 26;
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const t = (i / PHOTO_COUNT) * Math.PI * 2;
+        const z = (i / (PHOTO_COUNT - 1)) * tunnelLength - tunnelLength / 2;
+        positions.push(new THREE.Vector3(
+          Math.cos(t) * tunnelRadius,
+          Math.sin(t) * tunnelRadius,
+          z
+        ));
+        rotations.push(new THREE.Euler(0, -t + Math.PI / 2, 0));
+      }
+      break;
+    }
+
+    case 'palm': {
+      // Simplified palm/cupping-hands shape
+      // 5 photos forming an arc (fingers)
+      // 4 photos forming the palm bowl
+      // 3 photos for the base/wrist
+      const palmPositions = [
+        // Thumb
+        { x: -5.5, y: 5.5, z: -2 },
+        // Index finger
+        { x: -5, y: 7.5, z: 1 },
+        // Middle finger
+        { x: -2, y: 8.5, z: 2 },
+        // Ring finger
+        { x: 1, y: 8, z: 2 },
+        // Pinky
+        { x: 4, y: 6.5, z: 1 },
+        // Upper palm
+        { x: -4, y: 4, z: 2 },
+        { x: -1, y: 5, z: 3 },
+        { x: 2, y: 4.5, z: 2.5 },
+        { x: -2, y: 2, z: 2.5 },
+        // Lower palm bowl
+        { x: -3, y: 0.5, z: 1.5 },
+        { x: 0, y: -1, z: 1 },
+        { x: 2, y: 0, z: 1.5 },
+      ];
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const p = palmPositions[i] || palmPositions[i % palmPositions.length];
+        positions.push(new THREE.Vector3(p.x, p.y, p.z + (Math.random() - 0.5) * 1));
+        rotations.push(new THREE.Euler(0.1, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.15));
+      }
+      break;
+    }
+  }
+
+  return { positions, rotations };
+}
+
+// ============================================================
+// ENTRANCE ANIMATION + FORMATION STATE
+// ============================================================
+const formationNames = ['scattered', 'heart', 'ring', 'sphere', 'cascade', 'wave', 'tunnel', 'palm'];
+const formationTexts = [
+  '所有的偶然，都是命中注定的必然',   // scattered
+  '你在身旁，就是最好的时光',          // heart
+  '遇见你，是我此生最美的意外',        // ring
+  '世间万物，都不及你',               // sphere
+  '我们的故事，从这里开始',            // cascade
+  '有你的每一天，都值得纪念',          // wave
+  '执子之手，与子偕老',               // tunnel
+  '想把你捧在手心，永远珍惜',          // palm
+];
+
+let currentFormationIdx = 2; // start with ring after entrance
+let targetFormationIdx = 2;
+let transitionProgress = 1.0;
+let isTransitioning = false;
+
+// Entrance animation state machine
+// 0=waiting, 1=camera-dolly, 2=photos-fly-in, 3=complete
+let entrancePhase = 0;
+let entranceStartTime = 0;
+
+// Auto-play montage
+let autoPlayActive = false;
+let autoPlayTimer = null;
+let autoPlayHoldDuration = 5000; // hold each formation for 5s
+let userInteracted = false; // for autoplaying music on first interaction
+
+// Burst/spark particles on formation change
+let burstParticles = [];
+const burstGroup = new THREE.Group();
+scene.add(burstGroup);
+
+// Store start positions/rotations for smooth transition interpolation
+const transitionStartPos = Array.from({length: PHOTO_COUNT}, () => new THREE.Vector3());
+const transitionStartRot = Array.from({length: PHOTO_COUNT}, () => new THREE.Euler());
+const transitionTargetPos = Array.from({length: PHOTO_COUNT}, () => new THREE.Vector3());
+const transitionTargetRot = Array.from({length: PHOTO_COUNT}, () => new THREE.Euler());
+
+// Store fly-in start positions (far away in all directions)
+const flyInStartPos = Array.from({length: PHOTO_COUNT}, () => new THREE.Vector3());
+
+// Initialize photos at far-away scattered positions for entrance
+const ringFormation = getFormationPositions('ring');
+photos.forEach((photo, i) => {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const dist = 30 + Math.random() * 40;
+  flyInStartPos[i].set(
+    dist * Math.sin(phi) * Math.cos(theta),
+    dist * Math.sin(phi) * Math.sin(theta),
+    dist * Math.cos(phi) * 0.5
+  );
+  photo.position.copy(flyInStartPos[i]);
+  photo.rotation.set(
+    (Math.random() - 0.5) * Math.PI * 2,
+    (Math.random() - 0.5) * Math.PI * 2,
+    (Math.random() - 0.5) * Math.PI * 2
+  );
+  photo.scale.setScalar(0.01); // start tiny
+  photo.userData.targetPos.copy(ringFormation.positions[i]);
+  photo.userData.targetRot.copy(ringFormation.rotations[i]);
+  transitionTargetPos[i].copy(ringFormation.positions[i]);
+  transitionTargetRot[i].copy(ringFormation.rotations[i]);
+});
+
+// Start entrance animation
+setTimeout(() => {
+  entrancePhase = 1;
+  entranceStartTime = performance.now() * 0.001;
+}, 600);
+
+function spawnBurstParticles(origin) {
+  const count = 25;
+  for (let i = 0; i < count; i++) {
+    const geo = new THREE.SphereGeometry(0.06, 4, 4);
+    const mat = new THREE.MeshBasicMaterial({
+      color: Math.random() < 0.5
+        ? new THREE.Color().setHSL(0.93, 0.9, 0.6 + Math.random() * 0.4)
+        : new THREE.Color().setHSL(0.12, 0.8, 0.7 + Math.random() * 0.3),
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const particle = new THREE.Mesh(geo, mat);
+    particle.position.copy(origin);
+    const speed = 3 + Math.random() * 8;
+    const dir = new THREE.Vector3(
+      (Math.random() - 0.5) * 2,
+      (Math.random() - 0.5) * 2,
+      (Math.random() - 0.5) * 2
+    ).normalize();
+    particle.userData = {
+      velocity: dir.multiplyScalar(speed),
+      life: 0.8 + Math.random() * 1.2,
+      age: 0,
+    };
+    burstGroup.add(particle);
+    burstParticles.push(particle);
+  }
+}
+
+function resetAutoPlayTimer() {
+  if (autoPlayTimer) clearTimeout(autoPlayTimer);
+  if (autoPlayActive) {
+    autoPlayTimer = setTimeout(() => {
+      const next = (currentFormationIdx + 1) % formationNames.length;
+      goToFormation(next);
+    }, autoPlayHoldDuration);
+  }
+}
+
+function goToFormation(idx) {
+  if (isTransitioning && targetFormationIdx === idx) return;
+
+  const formation = getFormationPositions(formationNames[idx]);
+
+  photos.forEach((photo, i) => {
+    transitionStartPos[i].copy(photo.position);
+    transitionStartRot[i].copy(photo.rotation);
+    transitionTargetPos[i].copy(formation.positions[i]);
+    transitionTargetRot[i].copy(formation.rotations[i]);
+    photo.userData.targetPos.copy(formation.positions[i]);
+    photo.userData.targetRot.copy(formation.rotations[i]);
+  });
+
+  // Spawn burst from center
+  spawnBurstParticles(new THREE.Vector3(0, 0, 0));
+
+  targetFormationIdx = idx;
+  transitionProgress = 0;
+  isTransitioning = true;
+
+  updateDots(idx);
+  showText(formationTexts[idx]);
+
+  // Start auto-play on first interaction
+  if (!autoPlayActive) {
+    autoPlayActive = true;
+    tryPlayMusic();
+  }
+  resetAutoPlayTimer();
+
+  if (hintEl.style.opacity !== '0') {
+    hintEl.style.transition = 'opacity 1s ease';
+    hintEl.style.opacity = '0';
+    setTimeout(() => { hintEl.textContent = ''; }, 1000);
+  }
+}
+
+function tryPlayMusic() {
+  if (!audioEl) {
+    audioEl = audio;
+    audioEl.play().then(() => {
+      hasMusic = true;
+      musicBtn.textContent = '♫';
+      musicBtn.style.color = 'rgba(240, 215, 140, 0.9)';
+    }).catch(() => {});
+  }
+}
+
+function updateDots(idx) {
+  const dots = navDots.querySelectorAll('.dot');
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('active', i === idx);
+  });
+}
+
+// ============================================================
+// NAVIGATION DOTS
+// ============================================================
+// Clear existing dots and rebuild for all formations
+navDots.innerHTML = '';
+formationNames.forEach((name, i) => {
+  const dot = document.createElement('div');
+  dot.className = 'dot' + (i === currentFormationIdx ? ' active' : '');
+  dot.addEventListener('click', (e) => {
+    e.stopPropagation();
+    goToFormation(i);
+  });
+  navDots.appendChild(dot);
+});
+updateDots(currentFormationIdx);
+
+// ============================================================
+// TEXT OVERLAY SYSTEM
+// ============================================================
+let textTimer = null;
+function showText(text) {
+  if (textTimer) clearTimeout(textTimer);
+
+  // Fade out current
+  textLine.classList.remove('visible');
+
+  setTimeout(() => {
+    textLine.textContent = text;
+    textLine.classList.add('visible');
+
+    // Auto-hide after 4s
+    textTimer = setTimeout(() => {
+      textLine.classList.remove('visible');
+    }, 4000);
+  }, 600);
+}
+
+// ============================================================
+// MOUSE / TOUCH INTERACTION
+// ============================================================
+let isDragging = false;
+let hasDragged = false; // track if significant drag occurred (vs tap/swipe)
+let prevMouse = { x: 0, y: 0 };
+let rotationVelocity = { x: 0, y: 0 };
+let targetRotation = { x: 0, y: 0 };
+let autoRotate = true;
+let autoRotateSpeed = 0.15;
+let idleTimer = null;
+const idleDelay = 3000;
+
+function resetIdleTimer() {
+  autoRotate = false;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    autoRotate = true;
+  }, idleDelay);
+}
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  isDragging = true;
+  hasDragged = false;
+  prevMouse.x = e.clientX;
+  prevMouse.y = e.clientY;
+  rotationVelocity.x = 0;
+  rotationVelocity.y = 0;
+  resetIdleTimer();
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDragging) return;
+
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+    hasDragged = true;
+  }
+
+  targetRotation.y += dx * 0.005;
+  targetRotation.x += dy * 0.003;
+  targetRotation.x = Math.max(-0.6, Math.min(0.6, targetRotation.x));
+
+  rotationVelocity.y = dx * 0.005;
+  rotationVelocity.x = dy * 0.003;
+
+  prevMouse.x = e.clientX;
+  prevMouse.y = e.clientY;
+});
+
+window.addEventListener('pointerup', () => {
+  isDragging = false;
+});
+
+// Wheel to cycle formations
+let wheelAccum = 0;
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  resetIdleTimer();
+  wheelAccum += e.deltaY;
+  if (Math.abs(wheelAccum) > 60) {
+    const dir = wheelAccum > 0 ? 1 : -1;
+    wheelAccum = 0;
+    const baseIdx = isTransitioning ? targetFormationIdx : currentFormationIdx;
+    const newIdx = ((baseIdx + dir) % formationNames.length + formationNames.length) % formationNames.length;
+    goToFormation(newIdx);
+    resetAutoPlayTimer();
+  }
+}, { passive: false });
+
+// Swipe detection for mobile formation switching
+let swipeStartX = 0;
+let swipeStartY = 0;
+let swipeStartTime = 0;
+
+renderer.domElement.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+    swipeStartTime = Date.now();
+  }
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchend', (e) => {
+  if (hasDragged) return; // Don't swipe if user was rotating the scene
+  if (e.changedTouches.length === 1) {
+    const dx = e.changedTouches[0].clientX - swipeStartX;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    const dt = Date.now() - swipeStartTime;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    // Fast enough and long enough to be a swipe
+    if (dt < 400 && Math.max(absDx, absDy) > 40) {
+      const baseIdx = isTransitioning ? targetFormationIdx : currentFormationIdx;
+      if (absDx > absDy) {
+        // Horizontal swipe
+        const dir = dx > 0 ? -1 : 1;
+        goToFormation(((baseIdx + dir) % formationNames.length + formationNames.length) % formationNames.length);
+      } else {
+        // Vertical swipe
+        const dir = dy > 0 ? -1 : 1;
+        goToFormation(((baseIdx + dir) % formationNames.length + formationNames.length) % formationNames.length);
+      }
+      resetIdleTimer();
+    }
+  }
+});
+
+// Touch pinch to zoom
+let pinchStartDist = 0;
+let pinchStartZoom = 22;
+renderer.domElement.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    pinchStartDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    pinchStartZoom = camera.position.z;
+  }
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2) {
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const scale = pinchStartDist / dist;
+    camera.position.z = Math.max(10, Math.min(40, pinchStartZoom * scale));
+  }
+}, { passive: true });
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  const baseIdx = isTransitioning ? targetFormationIdx : currentFormationIdx;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    goToFormation((baseIdx + 1) % formationNames.length);
+    resetIdleTimer();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    goToFormation((baseIdx - 1 + formationNames.length) % formationNames.length);
+    resetIdleTimer();
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    autoRotate = !autoRotate;
+  } else if (e.key === 'a' || e.key === 'A') {
+    // Toggle auto-play
+    if (autoPlayActive) {
+      autoPlayActive = false;
+      if (autoPlayTimer) clearTimeout(autoPlayTimer);
+    } else {
+      autoPlayActive = true;
+      resetAutoPlayTimer();
+    }
+  }
+});
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+const clock = new THREE.Clock();
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function animate(timestamp) {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const time = timestamp * 0.001;
+
+  // === Auto rotation ===
+  if (autoRotate) {
+    targetRotation.y += autoRotateSpeed * dt;
+  }
+
+  // Apply inertia
+  if (!isDragging) {
+    rotationVelocity.x *= Math.exp(-8 * dt);
+    rotationVelocity.y *= Math.exp(-8 * dt);
+    targetRotation.x += rotationVelocity.x * dt;
+    targetRotation.y += rotationVelocity.y * dt;
+  }
+
+  // Smooth camera orbit via parent rotation of photosGroup
+  const smoothX = lerp(photosGroup.rotation.x || 0, targetRotation.x, 1 - Math.exp(-6 * dt));
+  const smoothY = lerp(photosGroup.rotation.y || 0, targetRotation.y, 1 - Math.exp(-6 * dt));
+  photosGroup.rotation.x = smoothX;
+  photosGroup.rotation.y = smoothY;
+
+  // === Entrance Animation ===
+  if (entrancePhase === 1) {
+    // Phase 1: Camera dolly from far to near (ease-out deceleration)
+    const elapsed = time - entranceStartTime;
+    const dollyDuration = 1.8;
+    const dollyProgress = Math.min(elapsed / dollyDuration, 1.0);
+    const eased = 1 - Math.pow(1 - dollyProgress, 3); // ease-out cubic
+    camera.position.z = lerp(60, 22, eased);
+
+    if (dollyProgress >= 1.0) {
+      entrancePhase = 2;
+      entranceStartTime = time;
+    }
+  }
+
+  if (entrancePhase === 2) {
+    // Phase 2: Photos fly in from scattered far positions to ring
+    const elapsed = time - entranceStartTime;
+    const flyDuration = 2.2;
+    const flyProgress = Math.min(elapsed / flyDuration, 1.0);
+
+    photos.forEach((photo, i) => {
+      // Staggered start - each photo starts slightly after the previous
+      const stagger = i * 0.06;
+      const individualProgress = Math.max(0, Math.min(1, (flyProgress - stagger) / (1 - stagger * PHOTO_COUNT * 0.4)));
+      const eased = 1 - Math.pow(1 - individualProgress, 4); // strong ease-out
+
+      photo.position.lerpVectors(flyInStartPos[i], transitionTargetPos[i], eased);
+      // Spin into place
+      const spinAmount = (1 - eased) * Math.PI * 2 * (1 + i * 0.2);
+      photo.rotation.x = spinAmount * 0.7;
+      photo.rotation.y = spinAmount;
+      photo.rotation.z = spinAmount * 0.5;
+      // Scale from tiny to full
+      photo.scale.setScalar(0.01 + eased * 0.99);
+    });
+
+    if (flyProgress >= 1.1) { // slight extra hold
+      entrancePhase = 3;
+      // Snap to exact targets
+      photos.forEach((photo, i) => {
+        photo.position.copy(transitionTargetPos[i]);
+        photo.rotation.copy(transitionTargetRot[i]);
+        photo.scale.setScalar(1);
+        photo.userData.targetPos.copy(transitionTargetPos[i]);
+        photo.userData.targetRot.copy(transitionTargetRot[i]);
+      });
+      // After entrance hold for a beat, then start the montage story
+      setTimeout(() => {
+        currentFormationIdx = 2; // we're visually at ring
+        if (!autoPlayActive) {
+          autoPlayActive = true;
+          tryPlayMusic();
+        }
+        // Jump to scattered (0) to begin the love story
+        goToFormation(0);
+      }, 1500);
+    }
+  }
+
+  // === Formation transitions ===
+  if (isTransitioning) {
+    transitionProgress += dt * 0.85;
+    if (transitionProgress >= 1.0) {
+      transitionProgress = 1.0;
+      isTransitioning = false;
+      currentFormationIdx = targetFormationIdx;
+      // Snap to exact targets
+      photos.forEach((photo, i) => {
+        photo.position.copy(transitionTargetPos[i]);
+        photo.rotation.copy(transitionTargetRot[i]);
+      });
+    }
+    const eased = easeInOutCubic(transitionProgress);
+
+    photos.forEach((photo, i) => {
+      photo.position.lerpVectors(transitionStartPos[i], transitionTargetPos[i], eased);
+      photo.rotation.x = lerp(transitionStartRot[i].x, transitionTargetRot[i].x, eased);
+      photo.rotation.y = lerp(transitionStartRot[i].y, transitionTargetRot[i].y, eased);
+      photo.rotation.z = lerp(transitionStartRot[i].z, transitionTargetRot[i].z, eased);
+      photo.scale.setScalar(lerp(photo.scale.x, 1, 0.15));
+    });
+  } else {
+    // Subtle idle float + breathing for photos
+    photos.forEach((photo, i) => {
+      const ud = photo.userData;
+      const floatX = Math.sin(time * 0.6 + i * 0.7) * 0.04;
+      const floatY = Math.cos(time * 0.5 + i * 0.9) * 0.04;
+      const breath = 1 + Math.sin(time * 0.7 + i * 0.5) * 0.015;
+      photo.position.x = ud.targetPos.x + floatX;
+      photo.position.y = ud.targetPos.y + floatY;
+      photo.position.z = ud.targetPos.z + Math.sin(time * 0.4 + i) * 0.03;
+      photo.scale.setScalar(breath);
+    });
+  }
+
+  // === Heart particles animation ===
+  heartSprites.forEach((sprite) => {
+    const ud = sprite.userData;
+    // Float up and down
+    const offsetY = Math.sin(time * ud.floatSpeed + ud.phase) * ud.floatAmp;
+    const offsetX = Math.cos(time * ud.floatSpeed * 0.7 + ud.phase) * ud.floatAmp * 0.5;
+    sprite.position.x = ud.basePosition.x + offsetX;
+    sprite.position.y = ud.basePosition.y + offsetY;
+    sprite.position.z = ud.basePosition.z + Math.cos(time * ud.floatSpeed * 0.6 + ud.phase) * ud.floatAmp * 0.5;
+
+    // Pulsing opacity
+    ud.life += ud.lifeSpeed;
+    const pulse = 0.5 + 0.5 * Math.sin(ud.life * Math.PI * 2);
+    sprite.material.opacity = 0.1 + pulse * 0.35;
+
+    // Subtle rotation
+    sprite.material.rotation = (sprite.material.rotation || 0) + ud.rotSpeed * 0.01;
+  });
+
+  // === Burst particles update ===
+  for (let i = burstParticles.length - 1; i >= 0; i--) {
+    const p = burstParticles[i];
+    p.userData.age += dt;
+    if (p.userData.age >= p.userData.life) {
+      burstGroup.remove(p);
+      p.material.dispose();
+      p.geometry.dispose();
+      burstParticles.splice(i, 1);
+    } else {
+      const progress = p.userData.age / p.userData.life;
+      p.userData.velocity.y += 0.5 * dt; // slight gravity
+      p.position.x += p.userData.velocity.x * dt;
+      p.position.y += p.userData.velocity.y * dt;
+      p.position.z += p.userData.velocity.z * dt;
+      p.material.opacity = 1 - progress;
+      p.scale.setScalar(1 - progress * 0.7);
+    }
+  }
+
+  // === Stars slow rotation ===
+  stars.rotation.y += dt * 0.03;
+  stars.rotation.x += dt * 0.01;
+  twinkleStars.rotation.y -= dt * 0.04;
+  twinkleStars.rotation.z += dt * 0.02;
+
+  // === Hearts group gentle rotation ===
+  heartsGroup.rotation.y += dt * 0.08;
+  heartsGroup.rotation.x += dt * 0.03;
+
+  // === Render ===
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// RESIZE HANDLER
+// ============================================================
+window.addEventListener('resize', () => {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// ============================================================
+// START
+// ============================================================
+// Sparkle particle generation (CSS-based)
+function spawnSparkle() {
+  const sparkle = document.createElement('div');
+  sparkle.className = 'sparkle';
+  sparkle.style.left = Math.random() * 90 + 5 + '%';
+  sparkle.style.top = Math.random() * 60 + 30 + '%';
+  sparkle.style.animationDuration = 2 + Math.random() * 3 + 's';
+  sparkle.style.animationDelay = '0s';
+  document.body.appendChild(sparkle);
+
+  sparkle.addEventListener('animationend', () => sparkle.remove());
+}
+
+// Spawn sparkles periodically
+setInterval(() => {
+  if (document.hidden) return;
+  const count = Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => spawnSparkle(), Math.random() * 400);
+  }
+}, 800);
+
+// Initial text appears after entrance animation completes
+setTimeout(() => {
+  showText(formationTexts[2]); // "遇见你，是我此生最美的意外"
+}, 3500);
+
+requestAnimationFrame(animate);
+
+// ============================================================
+// MUSIC BUTTON (placeholder for user's music)
+// ============================================================
+let hasMusic = false;
+let audioEl = null;
+
+// Try to load bgm.mp3 if exists
+const audio = new Audio();
+audio.loop = true;
+audio.volume = 0.5;
+audio.src = 'bgm.mp3';
+
+musicBtn.addEventListener('click', () => {
+  if (!audioEl) {
+    audioEl = audio;
+    audioEl.play().then(() => {
+      hasMusic = true;
+      musicBtn.textContent = '♫';
+      musicBtn.style.color = 'rgba(240, 215, 140, 0.9)';
+    }).catch(() => {
+      // No music file or autoplay blocked
+      musicBtn.style.opacity = '0.4';
+      setTimeout(() => { musicBtn.style.opacity = '1'; }, 200);
+    });
+  } else if (audioEl.paused) {
+    audioEl.play();
+    musicBtn.textContent = '♫';
+    musicBtn.style.color = 'rgba(240, 215, 140, 0.9)';
+  } else {
+    audioEl.pause();
+    musicBtn.textContent = '♬';
+    musicBtn.style.color = 'rgba(255,255,255,0.4)';
+  }
+});
+
+console.log('%c❤ %c我们的3D相册已就绪 %c❤',
+  'color:#ff9999;font-size:16px;',
+  'color:#f0d78c;font-size:14px;',
+  'color:#ff9999;font-size:16px;');
+console.log('%c入场动画播放中 | 拖拽旋转 | 滚轮切换 | 方向键切换 | A键开关自动播放 | 空格暂停旋转',
+  'color:#aaa;font-size:12px;');
+</script>
+</body>
+</html>

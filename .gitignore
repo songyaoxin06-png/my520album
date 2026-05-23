@@ -1,0 +1,10 @@
+node_modules/
+ffmpeg.exe
+ffmpeg.zip
+ffmpeg-master-latest-win64-gpl/
+.claude/
+server.py
+音频.mp4
+.DS_Store
+Thumbs.db
+*.log
