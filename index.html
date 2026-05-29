@@ -212,8 +212,12 @@
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const PHOTO_COUNT = 12;
-const PHOTO_PATHS = Array.from({length: PHOTO_COUNT}, (_, i) => `images/${i + 1}.jpg.jpg.jpg`);
+const PHOTO_COUNT = 38;
+// Old photos (1-12) have triple .jpg, new photos (13-39) have quadruple, skipping missing #18
+const PHOTO_PATHS = Array.from({length: PHOTO_COUNT}, (_, i) => {
+  const n = i < 17 ? i + 1 : i + 2; // skip 18
+  return n <= 12 ? `images/${n}.jpg.jpg.jpg` : `images/${n}.jpg.jpg.jpg.jpg`;
+});
 
 const ROMANTIC_TEXTS = [
   '所有的偶然，都是命中注定的必然',
@@ -568,13 +572,13 @@ function checkAllLoaded() {
   }
 }
 
-// Fallback: hide loading after 12 seconds even if photos aren't all loaded
+// Fallback: hide loading after 25 seconds even if photos aren't all loaded
 setTimeout(() => {
   if (!loadingEl.classList.contains('hidden')) {
     loadingEl.classList.add('hidden');
     setTimeout(() => loadingEl.remove(), 600);
   }
-}, 12000);
+}, 25000);
 
 // ============================================================
 // FORMATION DEFINITIONS
@@ -612,19 +616,19 @@ function getFormationPositions(type) {
     }
 
     case 'heart': {
-      const layerZ = [-2.4, -0.8, 0.8, 2.4];
+      const layerZ = [-3.5, -2.2, -0.9, 0.4, 1.7, 3.0];
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const t = (i / PHOTO_COUNT) * Math.PI * 2;
         const heart = heartPosition(t);
         const zIdx = i % layerZ.length;
-        positions.push(new THREE.Vector3(heart.x * 4, heart.y * 4, layerZ[zIdx] + (Math.random() - 0.5) * 1.2));
+        positions.push(new THREE.Vector3(heart.x * 4, heart.y * 4, layerZ[zIdx] + (Math.random() - 0.5) * 1.0));
         rotations.push(new THREE.Euler(0, 0, (Math.random() - 0.5) * 0.2));
       }
       break;
     }
 
     case 'ring': {
-      const radius = 12;
+      const radius = 16;
       const tiltAngle = 0.15;
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const angle = (i / PHOTO_COUNT) * Math.PI * 2;
@@ -644,7 +648,7 @@ function getFormationPositions(type) {
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const theta = 2 * Math.PI * i / goldenRatio;
         const phi = Math.acos(1 - 2 * (i + 0.5) / PHOTO_COUNT);
-        const radius = 11;
+        const radius = 14;
         positions.push(new THREE.Vector3(
           radius * Math.sin(phi) * Math.cos(theta),
           radius * Math.cos(phi),
@@ -660,15 +664,15 @@ function getFormationPositions(type) {
     }
 
     case 'cascade': {
-      const cols = 4;
-      const spacingX = 5.0;
-      const spacingY = 6.0;
+      const cols = 7;
+      const spacingX = 4.5;
+      const spacingY = 5.5;
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const col = i % cols;
         const row = Math.floor(i / cols);
         const offsetX = (col - (cols - 1) / 2) * spacingX;
         const offsetY = (row - 1) * -spacingY + 4.8;
-        const offsetZ = row * 3.0 - 5;
+        const offsetZ = row * 2.5 - 4;
         positions.push(new THREE.Vector3(offsetX, offsetY, offsetZ));
         rotations.push(new THREE.Euler(0, 0, 0));
       }
@@ -688,8 +692,8 @@ function getFormationPositions(type) {
     }
 
     case 'tunnel': {
-      const tunnelRadius = 10;
-      const tunnelLength = 26;
+      const tunnelRadius = 13;
+      const tunnelLength = 32;
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const t = (i / PHOTO_COUNT) * Math.PI * 2;
         const z = (i / (PHOTO_COUNT - 1)) * tunnelLength - tunnelLength / 2;
@@ -703,35 +707,59 @@ function getFormationPositions(type) {
       break;
     }
 
+    case 'grid': {
+      // Flat rectangular grid
+      const cols = 7;
+      const rows = Math.ceil(PHOTO_COUNT / cols);
+      const spacingX = 4.5;
+      const spacingY = 5.8;
+      for (let i = 0; i < PHOTO_COUNT; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const offsetX = (col - (cols - 1) / 2) * spacingX;
+        const offsetY = (row - (rows - 1) / 2 + 0.5) * spacingY;
+        positions.push(new THREE.Vector3(offsetX, -offsetY, 0));
+        rotations.push(new THREE.Euler(0, 0, 0));
+      }
+      break;
+    }
+
     case 'palm': {
-      // Simplified palm/cupping-hands shape
-      // 5 photos forming an arc (fingers)
-      // 4 photos forming the palm bowl
-      // 3 photos for the base/wrist
+      // Expanded palm/cupping-hands shape for up to 39 photos
       const palmPositions = [
-        // Thumb
-        { x: -5.5, y: 5.5, z: -2 },
-        // Index finger
-        { x: -5, y: 7.5, z: 1 },
-        // Middle finger
-        { x: -2, y: 8.5, z: 2 },
-        // Ring finger
-        { x: 1, y: 8, z: 2 },
-        // Pinky
-        { x: 4, y: 6.5, z: 1 },
-        // Upper palm
-        { x: -4, y: 4, z: 2 },
-        { x: -1, y: 5, z: 3 },
-        { x: 2, y: 4.5, z: 2.5 },
-        { x: -2, y: 2, z: 2.5 },
-        // Lower palm bowl
-        { x: -3, y: 0.5, z: 1.5 },
-        { x: 0, y: -1, z: 1 },
-        { x: 2, y: 0, z: 1.5 },
+        // Wrist (6 photos, bottom)
+        { x: -1.5, y: -3.5, z: -0.5 }, { x: -0.5, y: -3.8, z: -0.3 }, { x: 0.5, y: -3.7, z: -0.2 },
+        { x: 1.5, y: -3.3, z: 0 }, { x: 2.5, y: -2.8, z: 0.3 }, { x: 3, y: -2, z: 0.5 },
+        // Lower palm (7 photos, center bowl)
+        { x: -3, y: -1.5, z: 1.5 }, { x: -1.5, y: -1, z: 2 }, { x: 0, y: -1.5, z: 2.2 },
+        { x: 1.5, y: -0.5, z: 2 }, { x: 3, y: -0.8, z: 1.5 }, { x: 4, y: 0, z: 1 },
+        { x: 4.5, y: 1, z: 0.5 },
+        // Upper palm (8 photos)
+        { x: -3.5, y: 1, z: 2 }, { x: -2, y: 1.5, z: 2.5 }, { x: -0.5, y: 2, z: 2.8 },
+        { x: 1, y: 1.8, z: 2.5 }, { x: 2.5, y: 1.2, z: 2 }, { x: 3.5, y: 2, z: 1.5 },
+        { x: 4, y: 3, z: 1 }, { x: 5, y: 4, z: 0.5 },
+        // Thumb (4 photos, left side arc)
+        { x: -5.5, y: 3, z: -0.5 }, { x: -7, y: 4, z: -1 }, { x: -8, y: 5.5, z: -1.5 },
+        { x: -8.5, y: 7, z: -2 },
+        // Index finger (4 photos, tall)
+        { x: -5.5, y: 7, z: 0.5 }, { x: -5, y: 9, z: 1 }, { x: -4.5, y: 10.5, z: 1.5 },
+        { x: -4, y: 12, z: 2 },
+        // Middle finger (4 photos, tallest)
+        { x: -2, y: 8, z: 1.5 }, { x: -1.5, y: 10, z: 2 }, { x: -1, y: 12, z: 2.5 },
+        { x: -0.5, y: 13.5, z: 3 },
+        // Ring finger (4 photos)
+        { x: 1.5, y: 8, z: 1.5 }, { x: 2, y: 10, z: 1.8 }, { x: 2.5, y: 11.5, z: 2 },
+        { x: 3, y: 12.5, z: 2.2 },
+        // Pinky (3 photos, shortest)
+        { x: 5, y: 6.5, z: 1 }, { x: 5.5, y: 8, z: 1.2 }, { x: 6, y: 9, z: 1.3 },
       ];
       for (let i = 0; i < PHOTO_COUNT; i++) {
         const p = palmPositions[i] || palmPositions[i % palmPositions.length];
-        positions.push(new THREE.Vector3(p.x, p.y, p.z + (Math.random() - 0.5) * 1));
+        positions.push(new THREE.Vector3(
+          p.x + (Math.random() - 0.5) * 0.8,
+          p.y + (Math.random() - 0.5) * 0.5,
+          p.z + (Math.random() - 0.5) * 0.8
+        ));
         rotations.push(new THREE.Euler(0.1, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.15));
       }
       break;
@@ -744,7 +772,7 @@ function getFormationPositions(type) {
 // ============================================================
 // ENTRANCE ANIMATION + FORMATION STATE
 // ============================================================
-const formationNames = ['scattered', 'heart', 'ring', 'sphere', 'cascade', 'wave', 'tunnel', 'palm'];
+const formationNames = ['scattered', 'heart', 'ring', 'sphere', 'cascade', 'wave', 'tunnel', 'palm', 'grid'];
 const formationTexts = [
   '所有的偶然，都是命中注定的必然',   // scattered
   '你在身旁，就是最好的时光',          // heart
@@ -754,7 +782,18 @@ const formationTexts = [
   '有你的每一天，都值得纪念',          // wave
   '执子之手，与子偕老',               // tunnel
   '想把你捧在手心，永远珍惜',          // palm
+  '每一张照片，都是爱你的印记',        // grid
 ];
+
+// Carousel: 5-mode auto-play sequence (indices into formationNames)
+const carouselSequence = [
+  formationNames.indexOf('scattered'),  // 重力飘散
+  formationNames.indexOf('heart'),      // 心形阵列
+  formationNames.indexOf('tunnel'),     // 旋转圆柱
+  formationNames.indexOf('cascade'),    // 卡片叠放
+  formationNames.indexOf('grid'),       // 普通网格
+];
+let carouselIndex = 0; // current position in carousel
 
 let currentFormationIdx = 2; // start with ring after entrance
 let targetFormationIdx = 2;
@@ -851,8 +890,9 @@ function resetAutoPlayTimer() {
   if (autoPlayTimer) clearTimeout(autoPlayTimer);
   if (autoPlayActive) {
     autoPlayTimer = setTimeout(() => {
-      const next = (currentFormationIdx + 1) % formationNames.length;
-      goToFormation(next);
+      // Advance carousel to next formation in the 5-mode sequence
+      carouselIndex = (carouselIndex + 1) % carouselSequence.length;
+      goToFormation(carouselSequence[carouselIndex]);
     }, autoPlayHoldDuration);
   }
 }
@@ -1149,12 +1189,20 @@ function animate(timestamp) {
 
   // === Entrance Animation ===
   if (entrancePhase === 1) {
-    // Phase 1: Camera dolly from far to near (ease-out deceleration)
+    // Phase 1: Camera dolly — uniform speed first, then decelerate
     const elapsed = time - entranceStartTime;
     const dollyDuration = 1.8;
     const dollyProgress = Math.min(elapsed / dollyDuration, 1.0);
-    const eased = 1 - Math.pow(1 - dollyProgress, 3); // ease-out cubic
-    camera.position.z = lerp(60, 22, eased);
+    // Uniform for first 65%, then ease-out decelerate
+    const uniformEnd = 0.65;
+    let eased;
+    if (dollyProgress <= uniformEnd) {
+      eased = dollyProgress / uniformEnd * 0.7; // linear to 70% of travel
+    } else {
+      const t = (dollyProgress - uniformEnd) / (1 - uniformEnd);
+      eased = 0.7 + 0.3 * (1 - Math.pow(1 - t, 3)); // remaining 30% with ease-out
+    }
+    camera.position.z = lerp(65, 22, eased);
 
     if (dollyProgress >= 1.0) {
       entrancePhase = 2;
@@ -1194,15 +1242,16 @@ function animate(timestamp) {
         photo.userData.targetPos.copy(transitionTargetPos[i]);
         photo.userData.targetRot.copy(transitionTargetRot[i]);
       });
-      // After entrance hold for a beat, then start the montage story
+      // After entrance hold for a beat, kick off carousel
       setTimeout(() => {
         currentFormationIdx = 2; // we're visually at ring
         if (!autoPlayActive) {
           autoPlayActive = true;
           tryPlayMusic();
         }
-        // Jump to scattered (0) to begin the love story
-        goToFormation(0);
+        // Start carousel: scattered → heart → tunnel → cascade → grid
+        carouselIndex = 0;
+        goToFormation(carouselSequence[0]); // gravity scatter
       }, 1500);
     }
   }
@@ -1231,6 +1280,7 @@ function animate(timestamp) {
     });
   } else {
     // Subtle idle float + breathing for photos
+    const isScattered = formationNames[currentFormationIdx] === 'scattered';
     photos.forEach((photo, i) => {
       const ud = photo.userData;
       const floatX = Math.sin(time * 0.6 + i * 0.7) * 0.04;
@@ -1240,6 +1290,20 @@ function animate(timestamp) {
       photo.position.y = ud.targetPos.y + floatY;
       photo.position.z = ud.targetPos.z + Math.sin(time * 0.4 + i) * 0.03;
       photo.scale.setScalar(breath);
+      // Gravity drift for scattered mode: apply as position offset (don't mutate target)
+      if (isScattered) {
+        const drift = ud._gravityDrift || { x: 0, y: 0, z: 0 };
+        drift.y -= 0.003 * (1 + i * 0.03);
+        drift.x += Math.sin(time * 0.3 + i * 0.5) * 0.006;
+        drift.z += Math.cos(time * 0.25 + i * 0.4) * 0.005;
+        if (drift.y < -8) drift.y = 6 + Math.random() * 2;
+        photo.position.x += drift.x;
+        photo.position.y += drift.y;
+        photo.position.z += drift.z;
+        ud._gravityDrift = drift;
+      } else {
+        ud._gravityDrift = null; // reset when leaving scattered
+      }
     });
   }
 
